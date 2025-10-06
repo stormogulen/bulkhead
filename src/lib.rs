@@ -2,9 +2,11 @@
 
 pub mod backend;
 pub mod error;
+pub mod mem;
 pub mod types;
 
-// Re-export main items for convenience
+// Re-export
 pub use backend::*;
 pub use error::{VfsError, VfsResult};
+pub use mem::VfsMem;
 pub use types::*;
