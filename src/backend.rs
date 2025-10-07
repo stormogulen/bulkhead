@@ -1,9 +1,4 @@
-//! Core trait for VFS backends (in-memory, 9P, gRPC, etc.)
-
-//use crate::error::*;
-//use crate::types::*;
 use crate::error::VfsResult;
-//use crate::types::{Metadata, OpenOptions, VfsFile, VfsPath};
 use crate::CanRead;
 use crate::CanWrite;
 use crate::Dir;

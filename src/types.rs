@@ -1,81 +1,76 @@
-//! Core types for the VFS, including Qids, Stats, and file handles.
-
+// types.rs
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::time::SystemTime;
 
-/// Marker types for files/dirs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Object types
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct File;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Dir;
 
-/// Marker types for access modes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Access modes
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ReadOnly;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct WriteOnly;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ReadWrite;
 
-/// Traits for read/write capabilities
-pub trait CanRead: Send + Sync + 'static {}
+/// Traits for compile-time mode checking
+pub trait CanRead: Send + Sync {}
 impl CanRead for ReadOnly {}
 impl CanRead for ReadWrite {}
 
-pub trait CanWrite: Send + Sync + 'static {}
+pub trait CanWrite: Send + Sync {}
 impl CanWrite for WriteOnly {}
 impl CanWrite for ReadWrite {}
 
-/// Enum for distinguishing file types at runtime
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FileType {
-    File,
-    Dir,
-}
-
-/// Unique file identifier (9P qid)
+/// Unique file identifier (like 9P `qid`)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Qid {
+pub struct Qid<T = ()> {
     pub ty: u8,
     pub version: u32,
     pub path: u64,
+    #[serde(skip)]
+    pub _marker: PhantomData<T>,
 }
 
-impl Qid {
-    pub const QTDIR: u8 = 0x80;
-    pub const QTFILE: u8 = 0x00;
-
+impl<T> Qid<T> {
+    /// Create a new Qid for a file (ty = 0x00)
     pub fn new_file(path: u64, version: u32) -> Self {
         Self {
-            ty: Self::QTFILE,
+            ty: 0x00,
             version,
             path,
+            _marker: PhantomData,
         }
     }
+
+    /// Create a new Qid for a directory (ty = 0x80)
     pub fn new_dir(path: u64, version: u32) -> Self {
         Self {
-            ty: Self::QTDIR,
+            ty: 0x80,
             version,
             path,
-        }
-    }
-    pub fn is_dir(&self) -> bool {
-        self.ty & Self::QTDIR != 0
-    }
-    pub fn file_type(&self) -> FileType {
-        if self.is_dir() {
-            FileType::Dir
-        } else {
-            FileType::File
+            _marker: PhantomData,
         }
     }
 }
 
-/// File metadata (9P stat)
+/// Result of a walk operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Stat {
-    pub qid: Qid,
+pub struct WalkResult {
+    pub qids: Vec<Qid>,
+}
+
+/// File metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Stat<T = ()> {
+    pub qid: Qid<T>,
     pub name: String,
     pub size: u64,
     pub mode: u32,
@@ -85,28 +80,19 @@ pub struct Stat {
     pub gid: String,
 }
 
-impl Stat {
-    pub fn is_dir(&self) -> bool {
-        self.qid.is_dir()
-    }
-    pub fn file_type(&self) -> FileType {
-        self.qid.file_type()
-    }
-}
-
-/// Open file/directory handle with type-level guarantees
+/// Open file/directory handle
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileHandle<T = File, M = ReadOnly> {
+pub struct FileHandle<T = (), M = ()> {
     pub fid: u64,
-    pub qid: Qid,
+    pub qid: Qid<T>,
     pub path: String,
     pub mode: u32,
     #[serde(skip)]
-    _marker: PhantomData<(T, M)>,
+    pub _marker: PhantomData<(T, M)>,
 }
 
 impl<T, M> FileHandle<T, M> {
-    pub fn new(fid: u64, qid: Qid, path: String, mode: u32) -> Self {
+    pub fn new(fid: u64, qid: Qid<T>, path: String, mode: u32) -> Self {
         Self {
             fid,
             qid,
@@ -115,36 +101,4 @@ impl<T, M> FileHandle<T, M> {
             _marker: PhantomData,
         }
     }
-}
-
-/// Context for authenticated operations (zero-trust)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VfsContext {
-    pub uid: String,
-    pub gids: Vec<String>,
-    pub capabilities: Vec<String>,
-}
-
-impl VfsContext {
-    pub fn new(uid: impl Into<String>) -> Self {
-        Self {
-            uid: uid.into(),
-            gids: Vec::new(),
-            capabilities: Vec::new(),
-        }
-    }
-    pub fn with_gids(mut self, gids: Vec<String>) -> Self {
-        self.gids = gids;
-        self
-    }
-    pub fn with_capabilities(mut self, caps: Vec<String>) -> Self {
-        self.capabilities = caps;
-        self
-    }
-}
-
-/// Walk result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalkResult {
-    pub qids: Vec<Qid>,
 }

@@ -1,5 +1,11 @@
 use bulkhead::*;
-use tokio::runtime::Runtime;
+use crate::{ VfsError};
+use bulkhead::backends::VfsMem;
+
+use bulkhead::backend::VfsBackend;
+use bulkhead::types::{File, Dir, ReadOnly, ReadWrite};
+
+//use tokio::runtime::Runtime;
 
 #[tokio::test]
 async fn test_vfs_mem_basic_operations() -> VfsResult<()> {
@@ -8,7 +14,7 @@ async fn test_vfs_mem_basic_operations() -> VfsResult<()> {
 
     // --- Create a file ---
     let fh: FileHandle<File, ReadWrite> = backend.create::<ReadWrite, File>("file1", 0).await?;
-    assert_eq!(fh.path, "file1");
+    assert_eq!((fh.path), "/file1");
 
     // --- Write to file ---
     let content = b"Hello VFS!";
@@ -28,7 +34,7 @@ async fn test_vfs_mem_basic_operations() -> VfsResult<()> {
     backend.remove::<File>("file1").await?;
     let result = backend.stat("file1").await;
     println!("stat result: {:?}", result);
-    assert!(matches!(result, Err(VfsError::NotFound)));
+    assert!(matches!(result, Err(VfsError::NotFound(_))));
 
     Ok(())
 }
@@ -58,8 +64,10 @@ async fn test_vfs_mem_readdir() -> VfsResult<()> {
 async fn test_vfs_mem_walk() -> VfsResult<()> {
     let backend = VfsMem::new();
 
-    backend.create::<ReadWrite, File>("file1", 0).await?;
-    backend.create::<ReadWrite, File>("file2", 0).await?;
+    // create /file1 as a directory
+    backend.create::<ReadWrite, Dir>("/file1", 0).await?;
+    // create /file1/file2 as a file
+    backend.create::<ReadWrite, File>("/file1/file2", 0).await?;
 
     let walk_res = backend
         .walk("/", &["file1".to_string(), "file2".to_string()])
@@ -68,3 +76,4 @@ async fn test_vfs_mem_walk() -> VfsResult<()> {
 
     Ok(())
 }
+
